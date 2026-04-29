@@ -27,7 +27,7 @@ export default function Login() {
         navigate('/dashboard');
       } else {
         // Sign up new user
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
         });

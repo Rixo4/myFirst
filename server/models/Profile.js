@@ -7,7 +7,7 @@ async function readData() {
   try {
     const data = await fs.readFile(dataFile, 'utf-8');
     return JSON.parse(data);
-  } catch (e) {
+  } catch {
     // If file doesn't exist, return empty object
     return {};
   }

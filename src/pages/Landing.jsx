@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  BrainCircuit, Sparkles, ArrowRight, Zap, Target, Shield, CheckCircle2, MessageSquare, 
-  Layers, LineChart, Search, Book, Brain, Lightbulb, RefreshCw, BarChart, ListOrdered, Compass, Tag
+  BrainCircuit, Sparkles, ArrowRight, Zap, Target,
+  Layers, LineChart
 } from 'lucide-react';
 
 export default function Landing() {

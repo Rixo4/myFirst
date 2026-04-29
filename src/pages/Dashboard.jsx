@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, BrainCircuit, Sparkles, ThumbsUp, ThumbsDown, 
-  ChevronRight, Activity, BookOpen, UserCircle, Target,
-  RefreshCw, Bot, Lightbulb, MessageSquare, Compass, Tag, Brain, Filter, MousePointerClick, ListOrdered,
-  LayoutDashboard, FileText, Share2, TrendingUp, Users, User, BarChart2, Settings, UploadCloud
+  ChevronRight, Activity, UserCircle, Target,
+  RefreshCw, Bot, Lightbulb, Tag, Brain, Filter, MousePointerClick, ListOrdered,
+  FileText, Share2, UploadCloud
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import KnowledgeGraph from './KnowledgeGraph';
@@ -73,7 +73,7 @@ export default function Dashboard() {
       setUser(session.user);
       
       // Fetch their personalized neural profile from Supabase
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
@@ -896,7 +896,7 @@ export default function Dashboard() {
                   });
                   const data = await res.json();
                   setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply || data.error || 'Sorry, I could not get a response.' }]);
-                } catch (err) {
+                } catch {
                   setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, there was an error reaching the AI. Please try again.' }]);
                 } finally {
                   setIsChatLoading(false);

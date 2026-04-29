@@ -261,7 +261,7 @@ Make node id "1" the central topic. Be accurate and comprehensive.`
     let graphData;
     try {
       graphData = JSON.parse(cleaned);
-    } catch (parseErr) {
+    } catch {
       // Fallback: return a minimal sample graph so UI doesn't break
       graphData = {
         nodes: [
