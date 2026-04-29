@@ -7,6 +7,10 @@ import {
   LayoutDashboard, FileText, Share2, TrendingUp, Users, User, BarChart2, Settings, UploadCloud
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import KnowledgeGraph from './KnowledgeGraph';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -23,6 +27,28 @@ export default function Dashboard() {
   const [searchIntent, setSearchIntent] = useState(null);
   const [filteredCount, setFilteredCount] = useState(0);
   const [mediaTypeFilter, setMediaTypeFilter] = useState('All');
+  const [selectedReasoning, setSelectedReasoning] = useState(null);
+  const [reasoningExplanation, setReasoningExplanation] = useState('');
+  const [isLoadingReasoning, setIsLoadingReasoning] = useState(false);
+
+  // Documents tab state
+  const [docData, setDocData] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [docChatMessages, setDocChatMessages] = useState([]);
+  const [docChatInput, setDocChatInput] = useState('');
+  const [isDocChatLoading, setIsDocChatLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const docChatEndRef = React.useRef(null);
+  const fileInputRef = React.useRef(null);
+
+
+  // AI Assistant state
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'assistant', content: 'Hi! I am your Nexus AI assistant. Ask me anything — research questions, topic explanations, comparisons, or general knowledge.' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = React.useRef(null);
 
   useEffect(() => {
     const fetchUserAndProfile = async () => {
@@ -364,7 +390,7 @@ export default function Dashboard() {
             { id: 'Documents', icon: FileText },
             { id: 'AI Assistant', icon: Bot },
             { id: 'Knowledge Graph', icon: Share2 },
-            { id: 'Analytics', icon: BarChart2 },
+            { id: 'AI Reasoning', icon: Brain },
           ].map(tab => (
             <button
               key={tab.id}
@@ -618,58 +644,486 @@ export default function Dashboard() {
         </>
         )}
 
-        {activeTab === 'Documents' && (
-          <div style={{ display: 'flex', gap: '32px', height: '100%', alignItems: 'stretch' }}>
-            {/* Left Column: Upload */}
-            <div style={{ flex: '1.2', paddingTop: '12px' }}>
-              <h2 style={{ marginBottom: '8px', color: '#818cf8', fontSize: '1.8rem' }}>Documents</h2>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>0 papers in your knowledge base</p>
-              
-              <div style={{
-                border: '1px dashed rgba(255, 255, 255, 0.2)',
-                borderRadius: '16px',
-                padding: '48px',
-                textAlign: 'center',
-                background: 'rgba(255, 255, 255, 0.02)',
-                cursor: 'pointer',
-                marginBottom: '32px',
-                transition: 'all 0.2s',
-              }}
-              onMouseOver={e => {
-                e.currentTarget.style.background = 'rgba(99, 102, 241, 0.05)';
-                e.currentTarget.style.borderColor = 'var(--accent-color)';
-              }}
-              onMouseOut={e => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-              }}>
-                <UploadCloud size={32} style={{ color: 'var(--accent-color)', marginBottom: '16px', margin: '0 auto' }} />
-                <h4 style={{ color: '#fff', marginBottom: '8px', fontSize: '1.1rem' }}>Drop or click to upload</h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>PDF, DOCX, TXT supported</p>
+        {activeTab === 'Documents' && (() => {
+          const handleFile = async (file) => {
+            if (!file) return;
+            setIsAnalyzing(true);
+            setDocData(null);
+            setDocChatMessages([]);
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+              const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+              const res = await fetch(`${BACKEND}/api/document/analyze`, { method: 'POST', body: formData });
+              const data = await res.json();
+              if (data.error) throw new Error(data.error);
+              setDocData(data);
+              setDocChatMessages([{ role: 'assistant', content: `I've read your document **"${data.filename}"** (${data.wordCount?.toLocaleString()} words). Ask me anything about it!` }]);
+            } catch (err) {
+              alert('Error: ' + err.message);
+            } finally { setIsAnalyzing(false); }
+          };
+
+          const handleDocChat = async (e) => {
+            e.preventDefault();
+            const msg = docChatInput.trim();
+            if (!msg || isDocChatLoading || !docData) return;
+            setDocChatInput('');
+            const newHistory = [...docChatMessages, { role: 'user', content: msg }];
+            setDocChatMessages(newHistory);
+            setIsDocChatLoading(true);
+            setTimeout(() => docChatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+            try {
+              const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+              const res = await fetch(`${BACKEND}/api/document/chat`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: newHistory, documentText: docData.text })
+              });
+              const data = await res.json();
+              setDocChatMessages(prev => [...prev, { role: 'assistant', content: data.reply || 'Sorry, could not get a response.' }]);
+            } catch { setDocChatMessages(prev => [...prev, { role: 'assistant', content: 'Error reaching AI.' }]); }
+            finally { setIsDocChatLoading(false); setTimeout(() => docChatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100); }
+          };
+
+          return (
+            <div style={{ height: 'calc(100vh - 160px)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <h2 style={{ color: '#818cf8', fontSize: '1.6rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <FileText size={28} /> Documents
+                </h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Upload a document — AI will scan, summarize, and answer your questions about it</p>
               </div>
-              
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
-                <button style={{ background: 'rgba(99, 102, 241, 0.2)', color: '#a5b4fc', padding: '6px 16px', borderRadius: '999px', border: '1px solid transparent', fontSize: '0.85rem' }}>All</button>
-              </div>
-              
-              <div className="search-container" style={{ background: 'rgba(255,255,255,0.03)', border: 'none', marginBottom: '0' }}>
-                 <Search size={16} className="search-icon" style={{ left: '16px' }} />
-                 <input type="text" className="search-input" placeholder="Filter by title or author..." style={{ background: 'transparent', paddingLeft: '48px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }} />
-              </div>
+
+              {!docData && !isAnalyzing && (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={e => { e.preventDefault(); setIsDragging(false); handleFile(e.dataTransfer.files[0]); }}
+                  style={{
+                    border: `2px dashed ${isDragging ? 'var(--accent-color)' : 'rgba(255,255,255,0.15)'}`,
+                    borderRadius: '20px', padding: '64px', textAlign: 'center',
+                    background: isDragging ? 'rgba(99,102,241,0.06)' : 'rgba(255,255,255,0.02)',
+                    cursor: 'pointer', transition: 'all 0.2s', flex: 1,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px'
+                  }}
+                >
+                  <input ref={fileInputRef} type="file" accept=".pdf,.docx,.txt" hidden onChange={e => handleFile(e.target.files[0])} />
+                  <UploadCloud size={52} style={{ color: isDragging ? 'var(--accent-color)' : 'rgba(255,255,255,0.3)' }} />
+                  <div>
+                    <h3 style={{ color: '#fff', fontSize: '1.2rem', marginBottom: '8px' }}>Drop your document here</h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>or click to browse — PDF, DOCX, TXT supported (max 20MB)</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {['.pdf', '.docx', '.txt'].map(t => (
+                      <span key={t} style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: '6px', padding: '4px 10px', color: '#a5b4fc', fontSize: '0.8rem' }}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isAnalyzing && (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
+                  <RefreshCw size={40} className="pulse" style={{ color: 'var(--accent-color)' }} />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>AI is scanning and analyzing your document...</p>
+                </div>
+              )}
+
+              {docData && (
+                <div style={{ flex: 1, display: 'flex', gap: '24px', overflow: 'hidden' }}>
+                  {/* Left: Summary Panel */}
+                  <div style={{ width: '380px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+                    {/* File info */}
+                    <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '14px', padding: '18px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                        <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <FileText size={20} style={{ color: '#fff' }} />
+                        </div>
+                        <div>
+                          <p style={{ color: '#fff', fontWeight: '600', fontSize: '0.95rem' }}>{docData.filename}</p>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{(docData.size / 1024).toFixed(1)} KB · {docData.wordCount?.toLocaleString()} words</p>
+                        </div>
+                      </div>
+                      <button onClick={() => { setDocData(null); setDocChatMessages([]); }} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '6px 14px', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.8rem' }}>↑ Upload another</button>
+                    </div>
+
+                    {/* AI Summary */}
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '18px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <Sparkles size={16} style={{ color: '#818cf8' }} />
+                        <span style={{ color: '#818cf8', fontWeight: '600', fontSize: '0.9rem' }}>AI Summary</span>
+                      </div>
+                      <p style={{ color: '#e5e7eb', lineHeight: '1.7', fontSize: '0.9rem' }}>{docData.summary}</p>
+                    </div>
+
+                    {/* Quick questions */}
+                    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '14px', padding: '18px' }}>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Quick Questions</p>
+                      {['What is the main argument?', 'What are the key findings?', 'What methodology was used?', 'What are the limitations?'].map(q => (
+                        <button key={q} onClick={() => setDocChatInput(q)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '8px 12px', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.83rem', marginBottom: '6px', transition: 'all 0.2s' }}>
+                          → {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Right: Document Chat */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>Chat with your document</p>
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px', paddingRight: '4px' }}>
+                      {docChatMessages.map((msg, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: '10px', alignItems: 'flex-end' }}>
+                          {msg.role === 'assistant' && (
+                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FileText size={14} style={{ color: '#fff' }} /></div>
+                          )}
+                          <div style={{ maxWidth: '75%', padding: '10px 16px', borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px', background: msg.role === 'user' ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'rgba(255,255,255,0.05)', border: msg.role === 'assistant' ? '1px solid rgba(255,255,255,0.08)' : 'none', color: '#fff', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                            <div className="markdown-content">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {msg.content}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {isDocChatLoading && (
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileText size={14} style={{ color: '#fff' }} /></div>
+                          <div style={{ padding: '10px 16px', borderRadius: '16px 16px 16px 4px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}><RefreshCw size={14} className="pulse" style={{ color: 'var(--accent-color)' }} /></div>
+                        </div>
+                      )}
+                      <div ref={docChatEndRef} />
+                    </div>
+                    <form onSubmit={handleDocChat} style={{ display: 'flex', gap: '10px' }}>
+                      <input type="text" value={docChatInput} onChange={e => setDocChatInput(e.target.value)} placeholder="Ask anything about the document..." disabled={isDocChatLoading}
+                        style={{ flex: 1, padding: '12px 18px', borderRadius: '999px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: '0.9rem', outline: 'none' }} />
+                      <button type="submit" disabled={isDocChatLoading || !docChatInput.trim()} style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: isDocChatLoading || !docChatInput.trim() ? 0.5 : 1 }}>
+                        <ChevronRight size={18} style={{ color: '#fff' }} />
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
-            
-            {/* Right Column: Empty State */}
-            <div style={{ flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingLeft: '32px' }}>
-              <div style={{ opacity: 0.4, textAlign: 'center' }}>
-                <FileText size={64} style={{ color: 'var(--text-secondary)', marginBottom: '24px', margin: '0 auto' }} />
-                <h3 style={{ color: 'var(--text-primary)', marginBottom: '12px', fontSize: '1.2rem', fontWeight: '500' }}>Select a document to analyze</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>AI-powered summaries, citations, entities & insights</p>
-              </div>
+          );
+        })()}
+
+        {activeTab === 'AI Assistant' && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ color: '#818cf8', fontSize: '1.6rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Bot size={28} /> AI Assistant
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Powered by real AI — ask anything</p>
             </div>
+
+            {/* Messages */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              paddingRight: '8px',
+              marginBottom: '20px'
+            }}>
+              {chatMessages.map((msg, i) => (
+                <div key={i} style={{
+                  display: 'flex',
+                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                  gap: '12px',
+                  alignItems: 'flex-end'
+                }}>
+                  {msg.role === 'assistant' && (
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Bot size={16} style={{ color: '#fff' }} />
+                    </div>
+                  )}
+                  <div style={{
+                    maxWidth: '70%',
+                    padding: '12px 18px',
+                    borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                    background: msg.role === 'user'
+                      ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+                      : 'rgba(255, 255, 255, 0.05)',
+                    border: msg.role === 'assistant' ? '1px solid rgba(255,255,255,0.08)' : 'none',
+                    color: '#fff',
+                    fontSize: '0.95rem',
+                    lineHeight: '1.6'
+                  }}>
+                    <div className="markdown-content">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                  {msg.role === 'user' && (
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <UserCircle size={20} style={{ color: 'var(--text-secondary)' }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+              {isChatLoading && (
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Bot size={16} style={{ color: '#fff' }} />
+                  </div>
+                  <div style={{ padding: '12px 18px', borderRadius: '18px 18px 18px 4px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <RefreshCw size={16} className="pulse" style={{ color: 'var(--accent-color)' }} />
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Input */}
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const msg = chatInput.trim();
+                if (!msg || isChatLoading) return;
+                setChatInput('');
+                const newHistory = [...chatMessages, { role: 'user', content: msg }];
+                setChatMessages(newHistory);
+                setIsChatLoading(true);
+                setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+                try {
+                const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+                  const res = await fetch(`${BACKEND}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: [...newHistory] })
+                  });
+                  const data = await res.json();
+                  setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply || data.error || 'Sorry, I could not get a response.' }]);
+                } catch (err) {
+                  setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, there was an error reaching the AI. Please try again.' }]);
+                } finally {
+                  setIsChatLoading(false);
+                  setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+                }
+              }}
+              style={{ display: 'flex', gap: '12px', alignItems: 'center' }}
+            >
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                placeholder="Ask anything — topics, concepts, comparisons..."
+                disabled={isChatLoading}
+                style={{
+                  flex: 1,
+                  padding: '14px 20px',
+                  borderRadius: '999px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: '#fff',
+                  fontSize: '0.95rem',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="submit"
+                disabled={isChatLoading || !chatInput.trim()}
+                style={{
+                  width: '48px', height: '48px', borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: isChatLoading || !chatInput.trim() ? 0.5 : 1,
+                  transition: 'opacity 0.2s'
+                }}
+              >
+                <ChevronRight size={20} style={{ color: '#fff' }} />
+              </button>
+            </form>
           </div>
         )}
 
-        {activeTab !== 'Smart Search' && activeTab !== 'Documents' && (
+        {activeTab === 'Knowledge Graph' && <KnowledgeGraph />}
+
+        {activeTab === 'AI Reasoning' && (() => {
+          // Scoring functions
+          const scoreRelevance = (r) => {
+            if (!query) return 0;
+            const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+            const q = normalize(query);
+            const text = normalize(`${r.title} ${r.content}`);
+            
+            // Phrase match bonus
+            if (text.includes(q)) return 100;
+            
+            // Individual word match
+            const words = q.split(' ').filter(w => w.length > 1);
+            if (words.length === 0) return 0;
+            
+            let hits = 0;
+            words.forEach(w => { if (text.includes(w)) hits++; });
+            
+            const score = Math.round((hits / words.length) * 100);
+            return Math.max(5, score); // Min 5% if any match
+          };
+
+          const sortedResults = [...results].sort((a, b) => scoreRelevance(b) - scoreRelevance(a));
+
+          const scoreInterest = (r) => {
+            if (!learningProfile) return 30;
+            const topics = learningProfile.preferredTopics.map(t => t.toLowerCase());
+            const text = `${r.title} ${r.content}`.toLowerCase();
+            const hits = topics.filter(t => text.includes(t)).length;
+            return Math.min(100, 20 + hits * 25);
+          };
+          const scoreAuthority = (r) => {
+            const domain = (r.link || '').toLowerCase();
+            if (domain.includes('arxiv') || domain.includes('nature') || domain.includes('science')) return 95;
+            if (domain.includes('ieee') || domain.includes('springer') || domain.includes('acm')) return 88;
+            if (domain.includes('github') || domain.includes('huggingface')) return 78;
+            if (domain.includes('wikipedia')) return 70;
+            if (domain.includes('youtube')) return 65;
+            return 55;
+          };
+          const scoreQuality = (r) => Math.min(100, 30 + Math.round(r.content?.length / 8));
+
+          const factors = selectedReasoning ? [
+            { label: 'Relevance to Query', value: scoreRelevance(selectedReasoning), color: '#6366f1', desc: 'Keyword & semantic match with your search' },
+            { label: 'User Interest Alignment', value: scoreInterest(selectedReasoning), color: '#8b5cf6', desc: 'Match with your monitored research interests' },
+            { label: 'Source Authority', value: scoreAuthority(selectedReasoning), color: '#06b6d4', desc: 'Credibility score of the publishing domain' },
+            { label: 'Content Quality', value: scoreQuality(selectedReasoning), color: '#10b981', desc: 'Richness and depth of the content snippet' },
+          ] : [];
+
+          const handleExplain = async (result) => {
+            setIsLoadingReasoning(true);
+            setReasoningExplanation('');
+            try {
+              const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+              const factors_summary = `Relevance: ${scoreRelevance(result)}%, Interest: ${scoreInterest(result)}%, Authority: ${scoreAuthority(result)}%, Quality: ${scoreQuality(result)}%`;
+              const res = await fetch(`${BACKEND}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: [{ role: 'user', content: `In 2-3 casual conversational sentences, explain why this result titled "${result.title}" was ranked highly. Scores: ${factors_summary}. Keep it human and insightful, not robotic.` }] })
+              });
+              const data = await res.json();
+              setReasoningExplanation(data.reply || '');
+            } catch { setReasoningExplanation('Could not load explanation.'); }
+            finally { setIsLoadingReasoning(false); }
+          };
+
+          return (
+            <div style={{ height: 'calc(100vh - 160px)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ marginBottom: '24px' }}>
+                <h2 style={{ color: '#818cf8', fontSize: '1.6rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Brain size={28} /> AI Reasoning Panel
+                </h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Understand exactly why each result was ranked — full decision transparency</p>
+              </div>
+
+              {results.length === 0 ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', color: 'var(--text-secondary)' }}>
+                  <Brain size={52} style={{ opacity: 0.2, color: '#818cf8' }} />
+                  <p>Run a search in <strong>Smart Search</strong> first, then come back here to see the AI's reasoning.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '24px', flex: 1, overflow: 'hidden' }}>
+                  {/* Left: Result list */}
+                  <div style={{ width: '340px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                      {sortedResults.length} Results — Select to inspect
+                    </p>
+                    {sortedResults.map((r, i) => {
+                      const rel = scoreRelevance(r);
+                      const isSelected = selectedReasoning?.id === r.id;
+                      return (
+                        <div
+                          key={r.id}
+                          onClick={() => { setSelectedReasoning(r); setReasoningExplanation(''); }}
+                          style={{
+                            padding: '14px 16px', borderRadius: '12px', cursor: 'pointer',
+                            background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${isSelected ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.06)'}`,
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#a5b4fc', background: 'rgba(99,102,241,0.15)', borderRadius: '6px', padding: '2px 8px' }}>#{i + 1}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{r.topic}</span>
+                          </div>
+                          <p style={{ fontSize: '0.88rem', color: '#e5e7eb', fontWeight: '500', lineHeight: '1.4', marginBottom: '8px' }}>{r.title.slice(0, 70)}{r.title.length > 70 ? '…' : ''}</p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ flex: 1, height: '4px', borderRadius: '999px', background: 'rgba(255,255,255,0.08)' }}>
+                              <div style={{ width: `${rel}%`, height: '100%', borderRadius: '999px', background: 'linear-gradient(90deg, #6366f1, #8b5cf6)', transition: 'width 0.6s ease' }} />
+                            </div>
+                            <span style={{ fontSize: '0.75rem', color: '#a5b4fc', fontWeight: '600', minWidth: '32px' }}>{rel}%</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Right: Factor breakdown */}
+                  <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {!selectedReasoning ? (
+                      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexDirection: 'column', gap: '12px' }}>
+                        <Lightbulb size={40} style={{ opacity: 0.2 }} />
+                        <p>Select a result to see detailed AI reasoning</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', padding: '24px', marginBottom: '20px' }}>
+                          <h3 style={{ color: '#fff', fontSize: '1rem', marginBottom: '4px', lineHeight: '1.5' }}>{selectedReasoning.title}</h3>
+                          <a href={selectedReasoning.link} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', color: '#a5b4fc', textDecoration: 'none' }}>{selectedReasoning.link?.slice(0, 60)}…</a>
+                        </div>
+
+                        {/* Factor Bars */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+                          {factors.map(f => (
+                            <div key={f.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '14px', padding: '18px 22px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '10px' }}>
+                                <div>
+                                  <span style={{ color: '#e5e7eb', fontWeight: '600', fontSize: '0.95rem' }}>{f.label}</span>
+                                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', marginTop: '2px' }}>{f.desc}</p>
+                                </div>
+                                <span style={{ color: f.color, fontWeight: '800', fontSize: '1.4rem' }}>{f.value}%</span>
+                              </div>
+                              <div style={{ height: '8px', borderRadius: '999px', background: 'rgba(255,255,255,0.07)' }}>
+                                <div style={{
+                                  width: `${f.value}%`, height: '100%', borderRadius: '999px',
+                                  background: `linear-gradient(90deg, ${f.color}99, ${f.color})`,
+                                  transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
+                                  boxShadow: `0 0 12px ${f.color}55`
+                                }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* AI Explanation */}
+                        <div style={{ background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '14px', padding: '20px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                            <Brain size={18} style={{ color: '#818cf8' }} />
+                            <span style={{ color: '#818cf8', fontWeight: '600', fontSize: '0.9rem' }}>AI Explanation</span>
+                          </div>
+                          {reasoningExplanation ? (
+                            <p style={{ color: '#e5e7eb', lineHeight: '1.7', fontSize: '0.95rem' }}>{reasoningExplanation}</p>
+                          ) : (
+                            <button
+                              onClick={() => handleExplain(selectedReasoning)}
+                              disabled={isLoadingReasoning}
+                              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', borderRadius: '10px', padding: '10px 20px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600', fontSize: '0.9rem', opacity: isLoadingReasoning ? 0.6 : 1 }}
+                            >
+                              {isLoadingReasoning ? <><RefreshCw size={14} className="pulse" /> Generating...</> : <><Sparkles size={14} /> Explain this ranking</>}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {activeTab !== 'Smart Search' && activeTab !== 'Documents' && activeTab !== 'AI Assistant' && activeTab !== 'Knowledge Graph' && activeTab !== 'AI Reasoning' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
             <Sparkles size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
             <h2>{activeTab}</h2>

@@ -1,12 +1,18 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const { PDFParse } = require('pdf-parse');
+const mammoth = require('mammoth');
+const path = require('path');
 
 const Profile = require('./models/Profile');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 // 1. Get Learning Profile
 app.get('/api/profile/:userId', async (req, res) => {
@@ -72,9 +78,92 @@ app.get('/api/search', async (req, res) => {
     if (!response.ok) throw new Error("ArXiv API failed");
     
     const text = await response.text();
-    res.send(text); // Send raw XML back to the frontend
+    res.send(text);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// Document: Upload, Extract Text & AI Summary
+app.post('/api/document/analyze', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    let text = '';
+
+    if (ext === '.pdf') {
+      const parser = new PDFParse({ data: req.file.buffer });
+      const data = await parser.getText();
+      text = data.text;
+      await parser.destroy();
+    } else if (ext === '.docx') {
+      const result = await mammoth.extractRawText({ buffer: req.file.buffer });
+      text = result.value;
+    } else if (ext === '.txt') {
+      text = req.file.buffer.toString('utf-8');
+    } else {
+      return res.status(400).json({ error: 'Unsupported file type. Use PDF, DOCX, or TXT.' });
+    }
+
+    // Truncate for AI (max ~8000 chars)
+    const truncated = text.slice(0, 8000);
+
+    // Generate AI summary
+    let summary = "Summary unavailable due to AI service interruption.";
+    try {
+      const aiRes = await fetch('https://text.pollinations.ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: 'You are a document analyst. Give a clear, structured summary of the document in 3-5 sentences covering its main topic, key points, and purpose.' },
+            { role: 'user', content: `Summarize this document:\n\n${truncated}` }
+          ],
+          model: 'openai', seed: 42
+        })
+      });
+      if (aiRes.ok) {
+        const aiText = await aiRes.text();
+        if (aiText && !aiText.includes('<!DOCTYPE html>')) {
+          summary = aiText.trim();
+        }
+      }
+    } catch (e) { console.error("Summary error:", e); }
+
+    res.json({ filename: req.file.originalname, size: req.file.size, ext, text: truncated, summary, wordCount: text.split(/\s+/).length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Document: Q&A Chat with document context
+app.post('/api/document/chat', async (req, res) => {
+  try {
+    const { messages, documentText } = req.body;
+    const aiRes = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: `You are a helpful AI assistant. The user has uploaded a document. Answer their questions based on the document content below. Be conversational, accurate, and cite relevant parts when helpful.\n\n--- DOCUMENT ---\n${documentText}\n--- END DOCUMENT ---` },
+          ...messages
+        ],
+        model: 'openai', seed: 42
+      })
+    });
+    
+    if (!aiRes.ok) {
+      return res.status(502).json({ error: "AI service is temporarily unavailable. Please try again later." });
+    }
+    
+    const reply = await aiRes.text();
+    if (reply.includes('<!DOCTYPE html>')) {
+       return res.status(502).json({ error: "AI service returned an error page. Please try again later." });
+    }
+    
+    res.json({ reply: reply.trim() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -110,6 +199,132 @@ app.post('/api/web-search', async (req, res) => {
     res.json(mixedResults);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// 5. Knowledge Graph Generation via AI
+app.post('/api/knowledge-graph', async (req, res) => {
+  try {
+    const { query } = req.body;
+    const response = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a knowledge graph generator. ALWAYS return ONLY valid JSON. No markdown, no explanation, no code fences. Just the raw JSON object.'
+          },
+          {
+            role: 'user',
+            content: `Generate a knowledge graph for the research topic: "${query}".
+Return ONLY this JSON structure with 8-12 nodes and 10-15 edges:
+{
+  "nodes": [
+    {"id": "1", "label": "MainTopic", "type": "topic", "description": "brief description"},
+    {"id": "2", "label": "SubConcept", "type": "concept", "description": "brief description"}
+  ],
+  "edges": [
+    {"from": "1", "to": "2", "label": "includes"}
+  ]
+}
+Node types must be one of: topic, method, concept, dataset, author
+Make node id "1" the central topic. Be accurate and comprehensive.`
+          }
+        ],
+        model: 'openai',
+        seed: 42
+      })
+    });
+
+    if (!response.ok) {
+       throw new Error("AI service unavailable for Knowledge Graph generation.");
+    }
+
+    const text = await response.text();
+    if (text.includes('<!DOCTYPE html>')) {
+       throw new Error("AI service returned an error page.");
+    }
+
+    // Robust JSON extraction: strip markdown fences, grab largest {...} block
+    let cleaned = text
+      .replace(/```json/gi, '').replace(/```/g, '')  // strip code fences
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')  // strip control chars
+      .trim();
+
+    // Find the outermost { ... }
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end === -1) throw new Error('No JSON object found in AI response');
+    cleaned = cleaned.slice(start, end + 1);
+
+    let graphData;
+    try {
+      graphData = JSON.parse(cleaned);
+    } catch (parseErr) {
+      // Fallback: return a minimal sample graph so UI doesn't break
+      graphData = {
+        nodes: [
+          { id: '1', label: query, type: 'topic', description: 'Central topic' },
+          { id: '2', label: 'Core Concept', type: 'concept', description: 'Key idea' },
+          { id: '3', label: 'Method A', type: 'method', description: 'Main technique' },
+          { id: '4', label: 'Method B', type: 'method', description: 'Alternative technique' },
+          { id: '5', label: 'Dataset', type: 'dataset', description: 'Benchmark dataset' },
+        ],
+        edges: [
+          { from: '1', to: '2', label: 'includes' },
+          { from: '1', to: '3', label: 'uses' },
+          { from: '1', to: '4', label: 'uses' },
+          { from: '2', to: '5', label: 'trained on' },
+        ]
+      };
+    }
+
+    res.json(graphData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { messages } = req.body;
+    // messages = [{role: 'user'|'assistant', content: '...'}]
+
+    const response = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: `You are Nexus, a friendly, witty, and highly intelligent AI assistant. 
+You talk naturally and conversationally like a real person — not like a report generator. 
+Keep responses concise and engaging unless the user explicitly asks for detail.
+Use casual language, be warm, direct, and helpful. 
+You can answer anything: general knowledge, science, coding, opinions, jokes, advice, etc.
+Never format responses as bullet points or sections unless specifically asked.`
+          },
+          ...messages
+        ],
+        model: 'openai',
+        seed: 42
+      })
+    });
+
+    if (!response.ok) {
+      return res.status(502).json({ error: "AI service is currently unavailable. Please try again later." });
+    }
+
+    const text = await response.text();
+    if (text.includes('<!DOCTYPE html>')) {
+      return res.status(502).json({ error: "AI service returned an invalid response. Please try again later." });
+    }
+
+    res.json({ reply: text.trim() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
