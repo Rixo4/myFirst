@@ -185,7 +185,7 @@ export default function Dashboard() {
 
   const fetchFromWeb = async (searchQuery) => {
     try {
-      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5002';
       const response = await fetch(`${BACKEND}/api/web-search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -244,7 +244,7 @@ export default function Dashboard() {
         promptQuery = `Analyze this abstract and identify potential methodological limitations, biases, or gaps in the research: ${targetResult.content}`;
       }
 
-      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5002';
       const response = await fetch(`${BACKEND}/api/research`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -653,7 +653,7 @@ export default function Dashboard() {
             const formData = new FormData();
             formData.append('file', file);
             try {
-              const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+              const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5002';
               const res = await fetch(`${BACKEND}/api/document/analyze`, { method: 'POST', body: formData });
               const data = await res.json();
               if (data.error) throw new Error(data.error);
@@ -674,7 +674,7 @@ export default function Dashboard() {
             setIsDocChatLoading(true);
             setTimeout(() => docChatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
             try {
-              const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+              const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5002';
               const res = await fetch(`${BACKEND}/api/document/chat`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ messages: newHistory, documentText: docData.text })
@@ -888,7 +888,7 @@ export default function Dashboard() {
                 setIsChatLoading(true);
                 setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
                 try {
-                const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+                const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5002';
                   const res = await fetch(`${BACKEND}/api/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -995,7 +995,7 @@ export default function Dashboard() {
             setIsLoadingReasoning(true);
             setReasoningExplanation('');
             try {
-              const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+              const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5002';
               const factors_summary = `Relevance: ${scoreRelevance(result)}%, Interest: ${scoreInterest(result)}%, Authority: ${scoreAuthority(result)}%, Quality: ${scoreQuality(result)}%`;
               const res = await fetch(`${BACKEND}/api/chat`, {
                 method: 'POST',

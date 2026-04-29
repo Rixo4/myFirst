@@ -205,7 +205,7 @@ export default function KnowledgeGraph() {
     setSelectedNode(null);
     cancelAnimationFrame(animFrameRef.current);
     try {
-      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5002';
       const res = await fetch(`${BACKEND}/api/knowledge-graph`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

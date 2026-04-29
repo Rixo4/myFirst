@@ -408,5 +408,7 @@ Provide a clear, highly personalized research summary of the topic. Keep it conc
   }
 });
 
-const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const PORT = process.env.PORT || 5002;
+const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+module.exports = { app, server };

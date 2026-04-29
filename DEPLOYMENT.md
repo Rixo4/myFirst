@@ -32,7 +32,7 @@ Backend variables:
 ```bash
 GEMINI_API_KEY=your_gemini_api_key
 SERPER_API_KEY=your_serper_api_key
-PORT=5001
+PORT=5002
 ```
 
 Keep `.env` and `server/.env` out of git. They are already ignored.
@@ -52,7 +52,7 @@ In another terminal, run the frontend:
 npm run dev
 ```
 
-The app defaults to `http://localhost:5001` for backend calls if `VITE_BACKEND_URL` is not set.
+The app defaults to `http://localhost:5002` for backend calls if `VITE_BACKEND_URL` is not set.
 
 ## 5. Deploy backend
 
