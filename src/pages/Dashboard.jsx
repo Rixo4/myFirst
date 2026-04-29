@@ -159,7 +159,8 @@ export default function Dashboard() {
 
   const fetchFromWeb = async (searchQuery) => {
     try {
-      const response = await fetch('http://localhost:5001/api/web-search', {
+      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+      const response = await fetch(`${BACKEND}/api/web-search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: searchQuery })
@@ -217,7 +218,8 @@ export default function Dashboard() {
         promptQuery = `Analyze this abstract and identify potential methodological limitations, biases, or gaps in the research: ${targetResult.content}`;
       }
 
-      const response = await fetch('http://localhost:5001/api/research', {
+      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+      const response = await fetch(`${BACKEND}/api/research`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
