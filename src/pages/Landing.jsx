@@ -143,8 +143,8 @@ export default function Landing() {
                   <span className="agent-badge">Retrieving ✓</span>
                   <span className="agent-badge">Synthesising ✓</span>
                 </div>
-                <p style={{ fontFamily: 'monospace', color: '#e5e7eb', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>
-                  **FlashAttention-2** achieves exact attention computation in O(n) memory by restructuring SRAM utilization — enabling 100K+ token context win<span style={{ animation: 'pulse 1s infinite' }}>█</span>
+                <p style={{ fontFamily: 'monospace', color: '#e5e7eb', fontSize: '0.9rem', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+                  <strong style={{ color: 'var(--accent-color)' }}>FlashAttention-2</strong> achieves exact attention computation in O(n) memory by restructuring SRAM utilization — enabling 100K+ token context win<span style={{ animation: 'pulse 1s infinite' }}>█</span>
                 </p>
               </div>
             </div>
