@@ -18,7 +18,7 @@ export default function Login() {
 
     try {
       if (isLoginView) {
-        // Log in existing user
+        localStorage.removeItem('dev_bypass');
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -48,6 +48,7 @@ export default function Login() {
     setIsLoading(true);
     setErrorMsg('');
     try {
+      localStorage.removeItem('dev_bypass');
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {

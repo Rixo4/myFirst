@@ -4,7 +4,7 @@ import {
   Search, BrainCircuit, Sparkles, ThumbsUp, ThumbsDown, 
   ChevronRight, Activity, UserCircle, Target,
   RefreshCw, Bot, Lightbulb, Tag, Brain, Filter, MousePointerClick, ListOrdered,
-  FileText, Share2, UploadCloud
+  FileText, Share2, UploadCloud, LogOut
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import KnowledgeGraph from './KnowledgeGraph';
@@ -52,7 +52,35 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchUserAndProfile = async () => {
-      // DEV BYPASS CHECK
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        setUser(session.user);
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+          
+        if (data) {
+          setLearningProfile({
+            interactions: data.interactions || 0,
+            feedbackScore: data.feedback_score || 88,
+            preferredTopics: data.preferred_topics || ["Machine Learning", "Quantum Computing"],
+            recentLearnings: data.recent_learnings || ["Profile initialized."]
+          });
+        } else {
+          setLearningProfile({
+            interactions: 0,
+            feedbackScore: 88,
+            preferredTopics: ["Machine Learning", "Optimization", "Materials Science"],
+            recentLearnings: ["New profile initialized."]
+          });
+          await supabase.from('profiles').insert([{ id: session.user.id }]);
+        }
+        return;
+      }
+
       if (localStorage.getItem('dev_bypass') === 'true') {
         setUser({ id: 'dev-user-bypass' });
         setLearningProfile({
@@ -64,56 +92,24 @@ export default function Dashboard() {
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate('/login');
-        return;
-      }
-      
-      setUser(session.user);
-      
-      // Fetch their personalized neural profile from Supabase
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-        
-      if (data) {
-        setLearningProfile({
-          interactions: data.interactions || 0,
-          feedbackScore: data.feedback_score || 88,
-          preferredTopics: data.preferred_topics || ["Machine Learning", "Quantum Computing"],
-          recentLearnings: data.recent_learnings || ["Profile initialized."]
-        });
-      } else {
-        // If profile doesn't exist yet (or RLS blocked it), initialize a default one in memory
-        console.warn("Profile not found or blocked by RLS. Initializing default.");
-        setLearningProfile({
-          interactions: 0,
-          feedbackScore: 88,
-          preferredTopics: ["Machine Learning", "Optimization", "Materials Science"],
-          recentLearnings: ["New profile initialized."]
-        });
-        
-        // Try to insert it into DB just in case
-        await supabase.from('profiles').insert([{ id: session.user.id }]);
-      }
+      navigate('/login');
     };
 
     fetchUserAndProfile().then(() => {
-      // Check if they came from the landing page search bar
       const initialSearch = localStorage.getItem('initial_search');
       if (initialSearch) {
         setQuery(initialSearch);
         localStorage.removeItem('initial_search');
-        // Need a slight delay to let state and components mount before executing fetch
-        setTimeout(() => {
-          executeSearch(initialSearch);
-        }, 100);
+        setTimeout(() => executeSearch(initialSearch), 100);
       }
     });
   }, [navigate]);
+
+  const handleLogout = async () => {
+    localStorage.removeItem('dev_bypass');
+    await supabase.auth.signOut();
+    navigate('/login');
+  };
 
   const updateProfileInDB = async (updates) => {
     if (!user) return;
@@ -376,6 +372,31 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
+
+            <button 
+              onClick={handleLogout}
+              style={{
+                marginTop: '20px',
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: '10px',
+                color: '#fca5a5',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: '600',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+              onMouseOut={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+            >
+              <LogOut size={18} />
+              Sign Out
+            </button>
           </>
         )}
       </aside>
