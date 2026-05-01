@@ -24,8 +24,8 @@ Nexus AI is a next-generation research platform that adapts to your expertise le
 
 ### 1. Clone & Install
 ```bash
-git clone https://github.com/iknothingreal/NEXUS-AI.git
-cd NEXUS-AI
+git clone https://github.com/Rixo4/myFirst.git
+cd myFirst
 npm install
 cd server && npm install
 ```
