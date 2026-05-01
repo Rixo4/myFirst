@@ -9,10 +9,23 @@ const path = require('path');
 const Profile = require('./models/Profile');
 
 const app = express();
+
+// Request logging for debugging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*'
+  origin: process.env.FRONTEND_URL || '*',
+  credentials: true
 }));
 app.use(express.json());
+
+// Health check endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString(), env: !!process.env.SERPER_API_KEY ? 'Serper Key Present' : 'Serper Key Missing' });
+});
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
