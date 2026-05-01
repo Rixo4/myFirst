@@ -10,33 +10,11 @@ const Profile = require('./models/Profile');
 
 const app = express();
 
-// Request logging for debugging
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
-
 app.use(cors({
-  origin: '*', // Allow all origins for debugging
+  origin: process.env.FRONTEND_URL || '*',
   credentials: true
 }));
 app.use(express.json());
-
-// Catch-all logger for all /api requests
-app.use('/api', (req, res, next) => {
-  console.log(`[API DEBUG] ${req.method} ${req.url}`);
-  next();
-});
-
-// Health check endpoint
-app.get('/api/test', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    time: new Date().toISOString(), 
-    env: !!process.env.SERPER_API_KEY ? 'Present' : 'Missing',
-    frontend: process.env.FRONTEND_URL || 'Not Set'
-  });
-});
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
