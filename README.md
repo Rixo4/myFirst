@@ -1,17 +1,68 @@
-# React + Vite
+# Nexus AI — Adaptive Research Ecosystem
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Nexus AI is a next-generation research platform that adapts to your expertise level. It leverages multiple AI agents to synthesize technical papers, detect contradictions in research, and build a personalized knowledge graph of your learning journey.
 
-Currently, two official plugins are available:
+![Nexus AI Banner](src/assets/hero.png)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🚀 Key Features
 
-## React Compiler
+- **Adaptive Research Assistant**: Uses Gemini 1.5 Flash to generate insights tailored to your interaction history and precision score.
+- **Multi-Agent Pipeline**: Autonomous agents handle planning, retrieval, analysis, and synthesis.
+- **Neural Profiles**: A Supabase-backed persistent profile that learns your preferences, expertise, and technical depth over time.
+- **Living Knowledge Graph**: Visualize relationships between research entities and explore adjacent concepts.
+- **Smart Document Analysis**: Upload PDFs, DOCX, or TXT files for instant AI-powered summaries and contextual Q&A.
+- **Live Web Intelligence**: Real-time search bypassing SEO spam to find papers, patents, and technical blogs.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 🛠 Tech Stack
 
-## Expanding the ESLint configuration
+- **Frontend**: React, Vite, Lucide Icons, React Router
+- **Backend**: Node.js, Express, Multer
+- **Database**: Supabase (Auth + PostgreSQL with RLS)
+- **AI Models**: Google Gemini 1.5 Flash, Pollinations AI (Fallback), Serper (Google Search API)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-# NEXUS-AI
+## 📦 Getting Started
+
+### 1. Clone & Install
+```bash
+git clone https://github.com/iknothingreal/NEXUS-AI.git
+cd NEXUS-AI
+npm install
+cd server && npm install
+```
+
+### 2. Database Setup
+Run the `supabase-one-shot.sql` script in your Supabase SQL Editor to initialize the `profiles` table and necessary triggers.
+
+### 3. Environment Variables
+Create a `.env` in the root and `server/` directory:
+
+**Root `.env`:**
+```env
+VITE_SUPABASE_URL=your_url
+VITE_SUPABASE_ANON_KEY=your_key
+VITE_BACKEND_URL=http://localhost:5002
+```
+
+**Server `.env`:**
+```env
+GEMINI_API_KEY=your_gemini_key
+SERPER_API_KEY=your_serper_key
+VITE_SUPABASE_URL=your_url
+VITE_SUPABASE_ANON_KEY=your_key
+PORT=5002
+```
+
+### 4. Run Development
+**Terminal 1 (Backend):**
+```bash
+cd server
+npm start
+```
+
+**Terminal 2 (Frontend):**
+```bash
+npm run dev
+```
+
+## 📄 License
+ISC License. Built for the future of decentralized research.
