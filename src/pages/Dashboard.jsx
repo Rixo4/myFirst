@@ -52,47 +52,54 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchUserAndProfile = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session) {
-        setUser(session.user);
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-          
-        if (data) {
-          setLearningProfile({
-            interactions: data.interactions || 0,
-            feedbackScore: data.feedback_score || 88,
-            preferredTopics: data.preferred_topics || ["Machine Learning", "Quantum Computing"],
-            recentLearnings: data.recent_learnings || ["Profile initialized."]
-          });
-        } else {
-          setLearningProfile({
-            interactions: 0,
-            feedbackScore: 88,
-            preferredTopics: ["Machine Learning", "Optimization", "Materials Science"],
-            recentLearnings: ["New profile initialized."]
-          });
-          await supabase.from('profiles').insert([{ id: session.user.id }]);
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) throw sessionError;
+
+        if (session) {
+          setUser(session.user);
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+            
+          if (data) {
+            setLearningProfile({
+              interactions: data.interactions || 0,
+              feedbackScore: data.feedback_score || 88,
+              preferredTopics: data.preferred_topics || ["Machine Learning", "Quantum Computing"],
+              recentLearnings: data.recent_learnings || ["Profile initialized."]
+            });
+          } else {
+            setLearningProfile({
+              interactions: 0,
+              feedbackScore: 88,
+              preferredTopics: ["Machine Learning", "Optimization", "Materials Science"],
+              recentLearnings: ["New profile initialized."]
+            });
+            await supabase.from('profiles').insert([{ id: session.user.id }]);
+          }
+          return;
         }
-        return;
-      }
 
-      if (localStorage.getItem('dev_bypass') === 'true') {
-        setUser({ id: 'dev-user-bypass' });
-        setLearningProfile({
-          interactions: 42,
-          feedbackScore: 98,
-          preferredTopics: ["Machine Learning", "Quantum Computing", "Neuromorphic Engineering"],
-          recentLearnings: ["Dev Bypass Active.", "Bypassed Supabase authentication."]
-        });
-        return;
-      }
+        if (localStorage.getItem('dev_bypass') === 'true') {
+          setUser({ id: 'dev-user-bypass' });
+          setLearningProfile({
+            interactions: 42,
+            feedbackScore: 98,
+            preferredTopics: ["Machine Learning", "Quantum Computing", "Neuromorphic Engineering"],
+            recentLearnings: ["Dev Bypass Active.", "Bypassed Supabase authentication."]
+          });
+          return;
+        }
 
-      navigate('/login');
+        navigate('/login');
+      } catch (err) {
+        console.error("Auth error in Dashboard:", err);
+        navigate('/login');
+      }
     };
 
     fetchUserAndProfile().then(() => {

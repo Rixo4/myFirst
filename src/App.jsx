@@ -19,6 +19,7 @@ export default function App() {
     // 2. Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -31,7 +32,10 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Landing />} />
+        <Route 
+          path="/" 
+          element={isAuth ? <Navigate to="/dashboard" replace /> : <Landing />} 
+        />
         <Route 
           path="/login" 
           element={isAuth ? <Navigate to="/dashboard" replace /> : <Login />} 
@@ -40,7 +44,7 @@ export default function App() {
           path="/dashboard" 
           element={isAuth ? <Dashboard /> : <Navigate to="/login" replace />} 
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to={isAuth ? "/dashboard" : "/"} replace />} />
       </Routes>
     </Router>
   );

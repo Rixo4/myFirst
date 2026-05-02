@@ -76,11 +76,11 @@ app.get('/api/search', async (req, res) => {
   try {
     const arxivQuery = req.query.q;
     const arxivUrl = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(arxivQuery)}&start=0&max_results=10`;
-    
+
     // Fetch directly from Node (no CORS!)
     const response = await fetch(arxivUrl);
     if (!response.ok) throw new Error("ArXiv API failed");
-    
+
     const text = await response.text();
     res.send(text);
   } catch (error) {
@@ -155,16 +155,16 @@ app.post('/api/document/chat', async (req, res) => {
         model: 'openai', seed: 42
       })
     });
-    
+
     if (!aiRes.ok) {
       return res.status(502).json({ error: "AI service is temporarily unavailable. Please try again later." });
     }
-    
+
     const reply = await aiRes.text();
     if (reply.includes('<!DOCTYPE html>')) {
-       return res.status(502).json({ error: "AI service returned an error page. Please try again later." });
+      return res.status(502).json({ error: "AI service returned an error page. Please try again later." });
     }
-    
+
     res.json({ reply: reply.trim() });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -176,7 +176,7 @@ app.post('/api/web-search', async (req, res) => {
   try {
     const { query } = req.body;
     const serperKey = process.env.SERPER_API_KEY;
-    
+
     if (!serperKey) {
       return res.status(500).json({ error: "SERPER_API_KEY is missing in backend .env" });
     }
@@ -191,15 +191,15 @@ app.post('/api/web-search', async (req, res) => {
     });
 
     if (!response.ok) throw new Error("Serper API request failed");
-    
+
     const data = await response.json();
     let mixedResults = [];
-    
+
     // Aggregate results across all media types returned by Google
     if (data.organic) mixedResults = [...mixedResults, ...data.organic];
     if (data.news) mixedResults = [...mixedResults, ...data.news];
     if (data.videos) mixedResults = [...mixedResults, ...data.videos];
-    
+
     res.json(mixedResults);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -242,12 +242,12 @@ Make node id "1" the central topic. Be accurate and comprehensive.`
     });
 
     if (!response.ok) {
-       throw new Error("AI service unavailable for Knowledge Graph generation.");
+      throw new Error("AI service unavailable for Knowledge Graph generation.");
     }
 
     const text = await response.text();
     if (text.includes('<!DOCTYPE html>')) {
-       throw new Error("AI service returned an error page.");
+      throw new Error("AI service returned an error page.");
     }
 
     // Robust JSON extraction: strip markdown fences, grab largest {...} block
@@ -364,7 +364,7 @@ Provide a clear, highly personalized research summary of the topic. Keep it conc
     const { GoogleGenerativeAI } = require('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    
+
     try {
       const result = await model.generateContent(`${systemPrompt}\n\nTask: Based on the context, provide the requested output.`);
       const responseText = result.response.text();
@@ -377,7 +377,7 @@ Provide a clear, highly personalized research summary of the topic. Keep it conc
       });
     } catch (apiError) {
       console.warn("Gemini API Error (likely quota exceeded). Falling back to free Pollinations AI...", apiError.message);
-      
+
       // FALLBACK MECHANISM: Use completely free Pollinations AI API
       try {
         const fallbackResponse = await fetch('https://text.pollinations.ai/', {
@@ -391,9 +391,9 @@ Provide a clear, highly personalized research summary of the topic. Keep it conc
             model: 'openai'
           })
         });
-        
+
         const responseText = await fallbackResponse.text();
-        
+
         res.json({
           title: `AI Analysis (Pollinations API)`,
           content: responseText.trim(),
