@@ -23,18 +23,28 @@ export default function Login() {
           email,
           password,
         });
-        if (error) throw error;
+        if (error) {
+          if (error.message.includes("Email not confirmed")) {
+            throw new Error("Email not confirmed. Please check your inbox or disable 'Confirm Email' in Supabase settings.");
+          }
+          throw error;
+        }
         navigate('/dashboard');
       } else {
         // Sign up new user
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
         
-        // Supabase might require email confirmation, but for now we navigate
-        navigate('/dashboard');
+        // If email confirmation is required, Supabase returns a user but no session
+        if (data?.user && !data?.session) {
+          setErrorMsg("Success! Please check your email to confirm your account before logging in.");
+          setIsLoginView(true);
+        } else {
+          navigate('/dashboard');
+        }
       }
     } catch (error) {
       console.error("Supabase error:", error);
@@ -49,10 +59,17 @@ export default function Login() {
     setErrorMsg('');
     try {
       localStorage.removeItem('dev_bypass');
+      // Ensure we use the current base URL for redirection
+      const redirectUrl = `${window.location.origin}/dashboard`;
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: window.location.origin + '/dashboard'
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          }
         }
       });
       if (error) throw error;
